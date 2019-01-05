@@ -8,7 +8,7 @@ extern crate clap;
 use clap::{App, Arg};
 
 extern crate termion;
-use termion::{clear, cursor};
+use termion::{clear, cursor, terminal_size};
 
 const DEFAULT_PRINT_N: u16 = 32;
 const DEFAULT_MAX_DEPTH: usize = 4;
@@ -48,12 +48,31 @@ fn process_dir_entry(storage: &mut HashMap<String, NodeDir>, entry: &DirEntry) {
     }
 }
 
-fn update_print(root_path: &str, file_count: usize, storage: &HashMap<String, NodeDir>) {
+fn update_print(
+    root_path: &str,
+    n_lines: u16,
+    file_count: usize,
+    storage: &HashMap<String, NodeDir>,
+    only_biggest: bool,
+) {
     let mut order_storage: Vec<(&String, &NodeDir)> = storage.iter().collect();
     order_storage.sort_by_key(|a| a.1.size);
     order_storage.reverse();
 
-    print!("{}", cursor::Up(DEFAULT_PRINT_N + 1));
+    // build vector of paths be printed
+    // let biggest match only_biggest {}
+    let mut biggest: Vec<(&String, &NodeDir)> = Vec::new();
+    for v in order_storage.iter() {
+        if biggest.len() as u16 >= n_lines {
+            break;
+        }
+        if only_biggest {
+            biggest.retain(|x| !v.0.starts_with(x.0));
+        }
+        biggest.push(*v);
+    }
+
+    print!("{}", cursor::Up(n_lines + 1));
 
     print!("\rTotal file count: ");
     match decimal_prefix(file_count as f64) {
@@ -61,20 +80,15 @@ fn update_print(root_path: &str, file_count: usize, storage: &HashMap<String, No
         Prefixed(prefix, n) => println!("{:>6.2} {}", n, prefix.symbol()),
     }
 
-    let mut line_counter = 0;
-    for v in order_storage.iter() {
-        if line_counter >= DEFAULT_PRINT_N {
-            break;
-        }
+    for v in biggest.iter() {
         print!("{}", clear::CurrentLine);
         match decimal_prefix(v.1.size as f64) {
             Standalone(bytes) => print!("{:>6.2} B", bytes),
             Prefixed(prefix, n) => print!("{:>6.2} {}B", n, prefix.symbol()),
         }
         println!(" {:?}", v.0);
-        line_counter += 1;
     }
-    for _ in line_counter..DEFAULT_PRINT_N {
+    for _ in biggest.len() as u16..n_lines {
         println!();
     }
 }
@@ -100,6 +114,20 @@ fn main() {
                 .takes_value(true)
                 .value_name("NUM"),
         )
+        .arg(
+            Arg::with_name("lines")
+                .short("l")
+                .long("lines")
+                .help("Sets max printed lines. default=terminal height")
+                .takes_value(true)
+                .value_name("NUM_PRINT"),
+        )
+        .arg(
+            Arg::with_name("no_parent")
+                .short("n")
+                .long("no_parent")
+                .help("Does not print parents."),
+        )
         .get_matches();
 
     let config = (
@@ -108,6 +136,11 @@ fn main() {
             Some(x) => x.parse::<usize>().expect("Depth is uint only"),
             None => DEFAULT_MAX_DEPTH,
         },
+        match matches.value_of("lines") {
+            Some(x) => x.parse::<u16>().expect("Depth is uint only"),
+            None => terminal_size().unwrap().1 as u16 - 5,
+        },
+        matches.is_present("no_parent"),
     );
 
     println!("Path: \"{}\"", config.0);
@@ -118,7 +151,7 @@ fn main() {
     storage.insert(config.0.to_owned(), NodeDir { size: 0 });
 
     // init terminal space required
-    for _ in 0..DEFAULT_PRINT_N {
+    for _ in 0..config.2 {
         println!();
     }
     let mut file_count = 0;
@@ -131,10 +164,10 @@ fn main() {
     for entry in walkdir {
         file_count += 1;
         if instant_next < Instant::now() {
-            update_print(config.0, file_count, &storage);
+            update_print(config.0, config.2, file_count, &storage, config.3);
             instant_next = Instant::now() + Duration::from_millis(DEFAULT_UPDATE_INTERVAL_MILLIS);
         }
         process_dir_entry(&mut storage, &entry);
     }
-    update_print(config.0, file_count, &storage);
+    update_print(config.0, config.2, file_count, &storage, config.3);
 }
