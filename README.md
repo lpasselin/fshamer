@@ -4,5 +4,4 @@ CLI finding largest folders in a directory.
 
 Replacement for your monthly google search "linux find largest folders", which is usually required before updating your morbidly obese hard drive.
 
-
-[![asciicast](https://asciinema.org/a/Nrn4UX1AtbRIl2Zl3KLdz5qaU)](https://asciinema.org/a/Nrn4UX1AtbRIl2Zl3KLdz5qaU)
+[![asciicast](https://asciinema.org/a/Nrn4UX1AtbRIl2Zl3KLdz5qaU.svg)](https://asciinema.org/a/Nrn4UX1AtbRIl2Zl3KLdz5qaU)
