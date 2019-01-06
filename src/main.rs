@@ -90,6 +90,7 @@ fn update_print(
 #[structopt(rename_all = "kebab-case")]
 struct Config {
     // Specify root path
+    #[structopt(short, long, default_value=".")]
     path: String,
 
     #[structopt(short, long, default_value="0")]
