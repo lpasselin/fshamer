@@ -6,6 +6,6 @@ edition = "2018"
 
 [dependencies]
 walkdir = "2"
-clap = "2.32"
+structopt = "0.2"
 termion = "1.5"
 number_prefix = "0.2"

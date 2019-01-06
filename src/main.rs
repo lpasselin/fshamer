@@ -3,16 +3,12 @@ use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
 use std::time::{Duration, Instant};
 use walkdir::{DirEntry, WalkDir};
-
-extern crate clap;
-use clap::{App, Arg};
+use structopt::StructOpt;
 
 extern crate termion;
 use termion::{clear, cursor, terminal_size};
 
 const DEFAULT_PRINT_N: u16 = 32;
-const DEFAULT_MAX_DEPTH: usize = 4;
-const DEFAULT_UPDATE_INTERVAL_MILLIS: u64 = 100;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd)]
 struct NodeDir {
@@ -49,12 +45,7 @@ fn process_dir_entry(storage: &mut HashMap<String, NodeDir>, entry: &DirEntry) {
 }
 
 fn update_print(
-    root_path: &str,
-    n_lines: u16,
-    file_count: usize,
-    storage: &HashMap<String, NodeDir>,
-    only_biggest: bool,
-) {
+    config: &Config, file_count: usize, storage: &HashMap<String, NodeDir>) {
     let mut order_storage: Vec<(&String, &NodeDir)> = storage.iter().collect();
     order_storage.sort_by_key(|a| a.1.size);
     order_storage.reverse();
@@ -63,16 +54,16 @@ fn update_print(
     // let biggest match only_biggest {}
     let mut biggest: Vec<(&String, &NodeDir)> = Vec::new();
     for v in order_storage.iter() {
-        if biggest.len() as u16 >= n_lines {
+        if biggest.len() as u16 >= config.nb_line {
             break;
         }
-        if only_biggest {
+        if config.no_parent {
             biggest.retain(|x| !v.0.starts_with(x.0));
         }
         biggest.push(*v);
     }
 
-    print!("{}", cursor::Up(n_lines + 1));
+    print!("{}", cursor::Up(config.nb_line + 1));
 
     print!("\rTotal file count: ");
     match decimal_prefix(file_count as f64) {
@@ -88,86 +79,73 @@ fn update_print(
         }
         println!(" {:?}", v.0);
     }
-    for _ in biggest.len() as u16..n_lines {
+    for _ in biggest.len() as u16..config.nb_line {
         println!();
     }
 }
 
+#[derive(StructOpt, Debug)]
+#[structopt(name = "fshamer", about = "Finds largest folders")]
+#[structopt(raw(setting = "structopt::clap::AppSettings::ColoredHelp"))]
+#[structopt(rename_all = "kebab-case")]
+struct Config {
+    // Specify root path
+    path: String,
+
+    #[structopt(short, long, default_value="0")]
+    // Specify interval in ms to print during processing. 0 means never. 500 is decent.
+    interval: u64,
+
+    #[structopt(short, long, default_value="0")]
+    // Sets number of lines (folders) to print. 0 is terminal size.
+    nb_line: u16,
+
+    #[structopt(short="s", long)]
+    // Does not print parents of largest folders
+    no_parent: bool,
+
+//    #[structopt(short="d", long="max_depth", default_value=usize::MAX)]
+//    // Sets max recursive depth
+//    depth: usize,
+}
+
+fn edit_config(config: &mut Config) {
+    if config.nb_line == 0 {
+        config.nb_line = match terminal_size() {
+            Ok(x) => x.1 - 2, // magic -2, otherwise no space for total file count because of newline at end of command
+            _ => DEFAULT_PRINT_N,
+        }
+    }
+}
+
 fn main() {
-    // TODO remove entry from tree (HashMap) when processed and size is smaller than the smallest in our top 10.
-    let matches = App::new("My Super Program")
-        .author("lpasselin <louisphilippeasselin@gmail.com>")
-        .about("Finds biggest directories")
-        .arg(
-            Arg::with_name("path")
-                .short("p")
-                .long("path")
-                .help("Specify root path. default=\".\"")
-                .takes_value(true)
-                .value_name("PATH"),
-        )
-        .arg(
-            Arg::with_name("depth")
-                .short("d")
-                .long("depth")
-                .help("Sets max recursive depth. default=3")
-                .takes_value(true)
-                .value_name("NUM"),
-        )
-        .arg(
-            Arg::with_name("lines")
-                .short("l")
-                .long("lines")
-                .help("Sets max printed lines. default=terminal height")
-                .takes_value(true)
-                .value_name("NUM_PRINT"),
-        )
-        .arg(
-            Arg::with_name("no_parent")
-                .short("n")
-                .long("no_parent")
-                .help("Does not print parents."),
-        )
-        .get_matches();
-
-    let config = (
-        matches.value_of("path").unwrap_or("."),
-        match matches.value_of("depth") {
-            Some(x) => x.parse::<usize>().expect("Depth is uint only"),
-            None => DEFAULT_MAX_DEPTH,
-        },
-        match matches.value_of("lines") {
-            Some(x) => x.parse::<u16>().expect("Depth is uint only"),
-            None => terminal_size().unwrap().1 as u16 - 5,
-        },
-        matches.is_present("no_parent"),
-    );
-
-    println!("Path: \"{}\"", config.0);
-    println!("max depth: {}", config.1);
-    println!("====================");
+    let mut config = Config::from_args();
+    edit_config(&mut config);
 
     let mut storage: HashMap<String, NodeDir> = HashMap::new();
-    storage.insert(config.0.to_owned(), NodeDir { size: 0 });
+    storage.insert(config.path.to_owned(), NodeDir { size: 0 });
 
     // init terminal space required
-    for _ in 0..config.2 {
-        println!();
-    }
+
     let mut file_count = 0;
-    let mut instant_next = Instant::now() + Duration::from_millis(DEFAULT_UPDATE_INTERVAL_MILLIS);
-    let walkdir = WalkDir::new(config.0)
-        .max_depth(config.1)
+    let mut instant_next = Instant::now();
+    if config.interval != 0 {
+        instant_next = Instant::now() + Duration::from_millis(config.interval);
+        for _ in 0..config.nb_line {
+            println!();
+        }
+    }
+    let walkdir = WalkDir::new(&config.path)
         .same_file_system(true)
         .into_iter()
         .filter_map(|e| e.ok());
     for entry in walkdir {
         file_count += 1;
-        if instant_next < Instant::now() {
-            update_print(config.0, config.2, file_count, &storage, config.3);
-            instant_next = Instant::now() + Duration::from_millis(DEFAULT_UPDATE_INTERVAL_MILLIS);
+        if config.interval != 0 && instant_next < Instant::now() {
+            update_print(&config, file_count, &storage);
+            instant_next = Instant::now() + Duration::from_millis(config.interval);
         }
         process_dir_entry(&mut storage, &entry);
     }
-    update_print(config.0, config.2, file_count, &storage, config.3);
+    update_print(&config, file_count, &storage);
 }
