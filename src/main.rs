@@ -2,13 +2,13 @@ use number_prefix::{decimal_prefix, PrefixNames, Prefixed, Standalone};
 use std::collections::HashMap;
 use std::os::unix::fs::MetadataExt;
 use std::time::{Duration, Instant};
-use walkdir::{DirEntry, WalkDir};
 use structopt::StructOpt;
+use walkdir::{DirEntry, WalkDir};
 
 extern crate termion;
 use termion::{clear, cursor, terminal_size};
 
-const DEFAULT_PRINT_N: u16 = 32;
+const DEFAULT_PRINT_N: u16 = 28;
 
 #[derive(Debug, Eq, PartialEq, PartialOrd)]
 struct NodeDir {
@@ -44,14 +44,12 @@ fn process_dir_entry(storage: &mut HashMap<String, NodeDir>, entry: &DirEntry) {
     }
 }
 
-fn update_print(
-    config: &Config, file_count: usize, storage: &HashMap<String, NodeDir>) {
+fn update_print(config: &Config, file_count: usize, storage: &HashMap<String, NodeDir>) {
     let mut order_storage: Vec<(&String, &NodeDir)> = storage.iter().collect();
     order_storage.sort_by_key(|a| a.1.size);
     order_storage.reverse();
 
     // build vector of paths be printed
-    // let biggest match only_biggest {}
     let mut biggest: Vec<(&String, &NodeDir)> = Vec::new();
     for v in order_storage.iter() {
         if biggest.len() as u16 >= config.nb_line {
@@ -90,32 +88,40 @@ fn update_print(
 #[structopt(rename_all = "kebab-case")]
 struct Config {
     // Specify root path
-    #[structopt(short, long, default_value=".")]
+    #[structopt(short, long, default_value = ".")]
     path: String,
 
-    #[structopt(short, long, default_value="0")]
+    #[structopt(short, long, default_value = "200")]
     // Specify interval in ms to print during processing. 0 means never. 500 is decent.
     interval: u64,
 
-    #[structopt(short, long, default_value="0")]
-    // Sets number of lines (folders) to print. 0 is terminal size.
+    #[structopt(short, long, default_value = "0")]
+    // Sets number of lines (folders) to print. 0 is max(terminal_height, 28).
     nb_line: u16,
 
-    #[structopt(short="s", long)]
+    #[structopt(short = "s", long)]
     // Does not print parents of largest folders
     no_parent: bool,
-
-//    #[structopt(short="d", long="max_depth", default_value=usize::MAX)]
-//    // Sets max recursive depth
-//    depth: usize,
 }
 
 fn edit_config(config: &mut Config) {
     if config.nb_line == 0 {
         config.nb_line = match terminal_size() {
-            Ok(x) => x.1 - 2, // magic -2, otherwise no space for total file count because of newline at end of command
+            Ok(x) => {
+                if x.1 > DEFAULT_PRINT_N {
+                    DEFAULT_PRINT_N
+                } else {
+                    x.1 - 2
+                }
+            } // magic -2, otherwise no space for total file count because of newline at end of command
             _ => DEFAULT_PRINT_N,
         }
+    }
+}
+
+fn init_terminal_space(config: &Config) {
+    for _ in 0..config.nb_line + 1 {
+        println!();
     }
 }
 
@@ -126,27 +132,28 @@ fn main() {
     let mut storage: HashMap<String, NodeDir> = HashMap::new();
     storage.insert(config.path.to_owned(), NodeDir { size: 0 });
 
-    // init terminal space required
-
     let mut file_count = 0;
     let mut instant_next = Instant::now();
     if config.interval != 0 {
         instant_next = Instant::now() + Duration::from_millis(config.interval);
-        for _ in 0..config.nb_line {
-            println!();
-        }
+        init_terminal_space(&config);
     }
+
     let walkdir = WalkDir::new(&config.path)
         .same_file_system(true)
         .into_iter()
         .filter_map(|e| e.ok());
     for entry in walkdir {
         file_count += 1;
+        process_dir_entry(&mut storage, &entry);
         if config.interval != 0 && instant_next < Instant::now() {
             update_print(&config, file_count, &storage);
             instant_next = Instant::now() + Duration::from_millis(config.interval);
         }
-        process_dir_entry(&mut storage, &entry);
+    }
+
+    if config.interval == 0 {
+        init_terminal_space(&config);
     }
     update_print(&config, file_count, &storage);
 }
