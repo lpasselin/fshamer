@@ -13,7 +13,6 @@ categories = ["command-line-utilities", "filesystem"]
 [badges]
 gitlab = { repository = "lpasselin/fshamer", branch = "master"}
 maintenance = { status = "passively-maintained" }
-is-it-maintained-open-issues = { repository = "https://gitlab.com/lpasselin/fshamer" }
 
 [dependencies]
 walkdir = "2"
