@@ -1,8 +1,19 @@
 [package]
 name = "fshamer"
 version = "0.1.0"
+description = "Finds largest directories"
 authors = ["lpasselin <louisphilippeasselin@gmail.com>"]
 edition = "2018"
+readme = "README.md"
+repository = "https://gitlab.com/lpasselin/fshamer"
+license-file = "MIT"
+keywords = ["directory", "size", "usage"]
+categories = ["Command line utilities"]
+
+[badges]
+gitlab = { repository = "lpasselin/fshamer", branch = "master"}
+maintenance = { status = "passively-maintained" }
+is-it-maintained-open-issues = { repository = "https://gitlab.com/lpasselin/fshamer" }
 
 [dependencies]
 walkdir = "2"
