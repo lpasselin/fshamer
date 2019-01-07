@@ -62,7 +62,6 @@ fn update_print(config: &Config, file_count: usize, storage: &HashMap<String, No
     }
 
     print!("{}", cursor::Up(config.nb_line + 1));
-    print!("{}", clear::CurrentLine);
     print!("\rTotal file count: ");
     match decimal_prefix(file_count as f64) {
         Standalone(bytes) => println!("{:>6.2}", bytes),

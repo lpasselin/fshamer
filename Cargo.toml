@@ -1,6 +1,6 @@
 [package]
 name = "fshamer"
-version = "0.1.1"
+version = "0.1.2"
 description = "Finds largest directories"
 authors = ["lpasselin <louisphilippeasselin@gmail.com>"]
 edition = "2018"
