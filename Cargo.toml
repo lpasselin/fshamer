@@ -6,7 +6,7 @@ authors = ["lpasselin <louisphilippeasselin@gmail.com>"]
 edition = "2018"
 readme = "README.md"
 repository = "https://gitlab.com/lpasselin/fshamer"
-license-file = "MIT"
+license = "MIT"
 keywords = ["directory", "size", "usage"]
 categories = ["Command line utilities"]
 
